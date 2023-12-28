@@ -1,138 +1,124 @@
 # -*- coding: utf-8 -*-
 
-import os
+from flask import Flask, render_template
 
-from flask import Flask, request, render_template
-from flaskext.babel import Babel
-from flask.ext.admin import Admin
-from flask.ext.admin.contrib.sqlamodel import ModelView
-from flask.ext.admin.contrib.fileadmin import FileAdmin
+from config import DefaultConfig
+from user import User
 
-from fbone import utils
-from fbone.models import User, UserDetail, Role
-from fbone.config import DefaultConfig, PROJECT
-from fbone.views import frontend, user, api
-from fbone.extensions import db, mail, cache, login_manager
+from extensions import db, login_manager
+from filters import format_date, pretty_date, nl2br
+from utils import INSTANCE_FOLDER_PATH
 
 
 # For import *
 __all__ = ['create_app']
 
-DEFAULT_BLUEPRINTS = (
-    frontend,
-    user,
-    api,
-)
 
-
-def create_app(config=None, app_name=None, blueprints=None):
+def create_app(config=None, app_name=None):
     """Create a Flask app."""
 
     if app_name is None:
-        app_name = PROJECT
-    if blueprints is None:
-        blueprints = DEFAULT_BLUEPRINTS
+        app_name = DefaultConfig.PROJECT
 
-    app = Flask(app_name)
+    app = Flask(app_name, instance_path=INSTANCE_FOLDER_PATH, instance_relative_config=True)
     configure_app(app, config)
     configure_hook(app)
-    configure_blueprints(app, blueprints)
+    configure_blueprints(app)
     configure_extensions(app)
     configure_logging(app)
     configure_template_filters(app)
     configure_error_handlers(app)
+    configure_cli(app)
 
     return app
 
 
-def configure_app(app, config):
-    """Configure app from object, parameter and env."""
+def configure_app(app, config=None):
+    """Different ways of configurations."""
 
+    # http://flask.pocoo.org/docs/api/#configuration
     app.config.from_object(DefaultConfig)
-    if config is not None:
+
+    # http://flask.pocoo.org/docs/config/#instance-folders
+    app.config.from_pyfile('production.cfg', silent=True)
+
+    if config:
         app.config.from_object(config)
-    # Override setting by env var without touching codes.
-    app.config.from_envvar('%s_APP_CONFIG' % PROJECT.upper(), silent=True)
+
+    # Use instance folder instead of env variables to make deployment easier.
+    #app.config.from_envvar('%s_APP_CONFIG' % DefaultConfig.PROJECT.upper(), silent=True)
 
 
 def configure_extensions(app):
     # flask-sqlalchemy
     db.init_app(app)
 
-    # flask-mail
-    mail.init_app(app)
-
-    # flask-cache
-    cache.init_app(app)
-
-    # flask-babel
-    babel = Babel(app)
-    @babel.localeselector
-    def get_locale():
-        accept_languages = app.config.get('ACCEPT_LANGUAGES')
-        return request.accept_languages.best_match(accept_languages)
+    # Sentry
+    if app.config['SENTRY_DSN']:
+        sentry.init(app, dsn=app.config['SENTRY_DSN'])
 
     # flask-login
     login_manager.login_view = 'frontend.login'
     login_manager.refresh_view = 'frontend.reauth'
+
     @login_manager.user_loader
     def load_user(id):
-        return User.query.get(int(id))
+        return User.query.get(id)
     login_manager.setup_app(app)
 
-    # flask-admin
-    admin = Admin()
-    # Views
-    # Model admin
-    admin.add_view(ModelView(User, db.session, endpoint='usermodel', category='Model'))
-    admin.add_view(ModelView(UserDetail, db.session, endpoint='userdetailmodel', category='Model'))
-    admin.add_view(ModelView(Role, db.session, endpoint='rolemodel', category='Model'))
-    # File admin 
-    path = os.path.join(os.path.dirname(__file__), 'static/img/users')
-    admin.add_view(FileAdmin(path, '/static/img/users', endpoint='useravatar', name='User Avatars', category='Image'))
-    admin.init_app(app)
 
-
-def configure_blueprints(app, blueprints):
+def configure_blueprints(app):
     """Configure blueprints in views."""
 
-    for blueprint in blueprints:
-        app.register_blueprint(blueprint)
+    from user import user
+    from frontend import frontend
+    from api import api
+
+    for bp in [user, frontend, api]:
+        app.register_blueprint(bp)
 
 
 def configure_template_filters(app):
-    @app.template_filter()
-    def pretty_date(value):
-        return utils.pretty_date(value)
+    """Configure filters."""
+
+    app.jinja_env.filters["pretty_date"] = pretty_date
+    app.jinja_env.filters["format_date"] = format_date
+    app.jinja_env.filters["nl2br"] = nl2br
 
 
 def configure_logging(app):
     """Configure file(info) and email(error) logging."""
 
     if app.debug or app.testing:
-        # skip debug and test mode.
+        # Skip debug and test mode. Just check standard output.
         return
 
     import logging
-    from logging.handlers import RotatingFileHandler, SMTPHandler
+    import os
+    from logging.handlers import SMTPHandler
 
     # Set info level on logger, which might be overwritten by handers.
+    # Suppress DEBUG messages.
     app.logger.setLevel(logging.INFO)
 
-    debug_log = os.path.join(app.root_path, app.config['DEBUG_LOG'])
-    file_handler = logging.handlers.RotatingFileHandler(debug_log, maxBytes=100000, backupCount=10)
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(logging.Formatter(
+    info_log = os.path.join(app.config['LOG_FOLDER'], 'info.log')
+    info_file_handler = logging.handlers.RotatingFileHandler(info_log, maxBytes=100000, backupCount=10)
+    info_file_handler.setLevel(logging.INFO)
+    info_file_handler.setFormatter(logging.Formatter(
         '%(asctime)s %(levelname)s: %(message)s '
         '[in %(pathname)s:%(lineno)d]')
     )
-    app.logger.addHandler(file_handler)
+    app.logger.addHandler(info_file_handler)
 
-    ADMINS = ['imwilsonxu@gmail.com']
+    # Testing
+    #app.logger.info("testing info.")
+    #app.logger.warn("testing warn.")
+    #app.logger.error("testing error.")
+
     mail_handler = SMTPHandler(app.config['MAIL_SERVER'],
                                app.config['MAIL_USERNAME'],
-                               ADMINS,
-                               'O_ops... %s failed!' % PROJECT,
+                               app.config['ADMINS'],
+                               'Your Application Failed!',
                                (app.config['MAIL_USERNAME'],
                                 app.config['MAIL_PASSWORD']))
     mail_handler.setLevel(logging.ERROR)
@@ -144,25 +130,23 @@ def configure_logging(app):
 
 
 def configure_hook(app):
+
     @app.before_request
     def before_request():
         pass
 
 
+# http://flask.pocoo.org/docs/latest/errorhandling/
 def configure_error_handlers(app):
-
-    @app.errorhandler(403)
-    def forbidden_page(error):
-        return render_template("errors/forbidden_page.html"), 403
 
     @app.errorhandler(404)
     def page_not_found(error):
-        return render_template("errors/page_not_found.html"), 404
+        return render_template("errors/404.html"), 404
 
-    @app.errorhandler(405)
-    def method_not_allowed_page(error):
-        return render_template("errors/method_not_allowed.html"), 405
 
-    @app.errorhandler(500)
-    def server_error_page(error):
-        return render_template("errors/server_error.html"), 500
+def configure_cli(app):
+
+    @app.cli.command()
+    def initdb():
+        db.drop_all()
+        db.create_all()

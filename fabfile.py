@@ -1,99 +1,132 @@
 # -*- coding: utf-8 -*-
-
-# http://docs.fabfile.org/en/1.5/tutorial.html
+"""
+Fabfile for managing a Python/Flask/Apache/MySQL project in MacOS/Ubuntu.
+"""
 
 import os
-from fabric.api import *
 
-#project = "fbone"
-#version = "0.1"
+from fabric.api import env, task, run, local, get, sudo
+from fabric.context_managers import cd, lcd, prefix, shell_env
+
+PROJECT_NAME = "fbone"
+
+# Remote Database Config
+REMOTE_DB_USERNAME = ""
+REMOTE_DB_PASSWORD = ""
+REMOTE_DB_NAME = ""
+
+# Local Database Config
+LOCAL_DB_USERNAME = ""
+LOCAL_DB_PASSWORD = ""
+LOCAL_DB_NAME = ""
 
 # the user to use for the remote commands
-#env.user = 'wilson'
+env.user = ''
 # the servers where the commands are executed
-env.hosts = ['127.0.0.1']
+env.hosts = ['']
+# http://stackoverflow.com/questions/17102968/reading-logs-with-fabric
+env.remote_interrupt = True
 
-#def pack():
-    #local('rm -rf %s-%s/' % (project, version))
-    #local('python setup.py sdist --formats=gztar', capture=False)
 
-# Deploy method form Flask docs. 
-# If you don't wanna mess up source codes with deployed codes, pls use this method.
-#def deploy():
-    #pack()
-    ## figure out the release name and version
-    #dist = local('python setup.py --fullname', capture=True).strip()
+@task
+def setup_python_macos():
+    """Setup Python in MacOS via Homebrew"""
 
-    ## upload the source tarball to the temporary folder on the server
-    #put('dist/%s.tar.gz' % dist, '/tmp/%s.tar.gz' % project)
+    # Setup Homebrew
+    # TODO: Test if Homebrew installed?
+    HOMEBREW_URL = "https://raw.githubusercontent.com/Homebrew/install/master/install"
+    local("/usr/bin/ruby -e \"$(curl -fsSL %s)\"" % HOMEBREW_URL)
+    local("echo export PATH=/usr/local/bin:/usr/local/sbin:$PATH >> ~/.bash_profile")
 
-    ## create a place where we can unzip the tarball, then enter
-    ## that directory and unzip it
-    #run('mkdir /tmp/%s' % project)
-    #with cd('/tmp/%s' % project):
-        #run('tar xzf /tmp/%s.tar.gz' % project)
-    #with cd('/tmp/%s/%s' % (project, dist)):
-        ## now setup the package with our virtual environment's
-        ## python interpreter
-        #run('/var/www/%s/env/bin/python setup.py install' % project)
-    ## now that all is set up, delete the folder again
-    #run('rm -rf /tmp/%s /tmp/%s.tar.gz' % (project, project))
-    ## and finally touch the .wsgi file so that mod_wsgi triggers
-    ## a reload of the application
-    #run('touch /var/www/%s.wsgi' % project)
+    # Setup Python
+    local("brew install python")
+    local("brew update")
 
-def run():
-    local("python manage.py run")
-    
-def initdb():
-    local("sudo rm -f /tmp/fbone.sqlite")
-    local("python manage.py initdb")
+    # Setup Virtualenv
+    local("pip install virtualenvwrapper")
+    local("echo source /usr/local/bin/virtualenvwrapper.sh >> ~/.bash_profile")
 
-def babel():
-    local("python setup.py compile_catalog --directory `find -name translations` --locale zh -f")
 
+@task
+def setup_python_ubuntu():
+    """Setup Python in Ubuntu, which already comes with Python"""
+
+    # Setup Virtualenv
+    local("pip install virtualenvwrapper")
+    local("echo source /usr/local/bin/virtualenvwrapper.sh >> ~/.bash_profile")
+
+
+@task
+def bootstrap():
+    """Bootstrap in local"""
+
+    local("rm -rf /tmp/instance")
+    local("mkdir -p /tmp/instance/logs")
+    local("mkdir -p /tmp/instance/uploads")
+
+    with shell_env(FLASK_APP='wsgi.py', FLASK_DEBUG="1"):
+        local("flask initdb")
+
+
+@task
+def bootstrap_production():
+    """Bootstrap in production server"""
+    pass
+
+
+@task
 def debug():
-    babel()
-    initdb()
-    run()
+    """Run in debug mode in local"""
 
-def init(project="myapp"):
-    project_dir = os.getcwd()
-    vhost_name = project + ".vhost"
-    
-    with cd(project_dir):
-        local("sudo chmod -R o+w %s" % project_dir)
+    with shell_env(FLASK_APP='wsgi.py', FLASK_DEBUG="1"):
+        local("flask run")
 
-        # setup.py and config.py
-        local("perl -pi -e 's/\"fbone\"/\"%s\"/g' setup.py fbone/config.py" % project)
-        # and *.py
-        local("perl -pi -e 's/^from fbone/from %s/g' `find -iname '*.py'`" % project)
 
-        # configure wsgi
-        local("perl -pi -e 's/fbone/%s/g' app.wsgi MANIFEST.in" % project)
+@task(alias='t')
+def test():
+    """Run unittest in local"""
 
-        # change fbone/ folder
-        local("mv fbone %s" % project)
+    with shell_env(FLASK_APP='wsgi.py', FLASK_DEBUG="1"):
+        local("python tests.py")
 
-        # logs folder
-        local("mkdir logs")
-        local("sudo chmod -R o+w logs")
 
-        # configure vhost
-        local("perl -pi -e 's!DAEMON_NAME!%s!g' app.vhost" % project)
-        local("perl -pi -e 's!PATH_TO_WSGI!%s!g' app.vhost" % os.path.join(project_dir, "app.wsgi"))
-        local("perl -pi -e 's!PATH_TO_PROJECT!%s!g' app.vhost" % project_dir)
-        local("sudo cp app.vhost /etc/apache2/sites-available/%s" % vhost_name)
-        #local("sudo a2dissite %s" % vhost_name)
-        local("sudo a2ensite %s" % vhost_name)
-        local("sudo service apache2 reload")
+@task
+def deploy():
+    """Deploy via Git"""
 
-        # virtualenv
-        local("virtualenv env")
-        activate_this = os.path.join(project_dir, "env/bin/activate_this.py")
-        execfile(activate_this, dict(__file__=activate_this))
-        local("python setup.py install")
-        local("python manage.py initdb")
+    local("cd " + os.path.join(os.environ["HOME"], PROJECT_NAME))
+    local("git push")
 
-        # make db readable to apache
-        local("sudo chmod o+w /tmp/%s.sqlite" % project)
+    with cd(os.path.join("/home/wilson", PROJECT_NAME)):
+        # Make sure git can be accessed via ssh
+        run("git pull")
+        # Make sure "WSGIScriptReloading On" in apache conf file
+        run("touch wsgi.py")
+
+
+@task
+def syncdb():
+    """Sync loacl db with remote db"""
+
+    if not REMOTE_DB_USERNAME or not REMOTE_DB_PASSWORD or not REMOTE_DB_NAME:
+        print "Please setup remote db configs"
+        return
+
+    if not LOCAL_DB_USERNAME or not LOCAL_DB_PASSWORD or not LOCAL_DB_NAME:
+        print "Please setup local db configs"
+        return
+
+    with cd("/tmp"):
+        run("mysqldump -u%s -p%s %s > latest_db.sql" % (REMOTE_DB_USERNAME,
+                                                        REMOTE_DB_PASSWORD,
+                                                        REMOTE_DB_NAME))
+        run("tar cfz latest_db.sql.tgz latest_db.sql")
+
+    # Download to local
+    get("/tmp/latest_db.sql.tgz", "/tmp")
+
+    with lcd("/tmp"):
+        local("tar xfz latest_db.sql.tgz")
+        local("mysql -u%s -p%s %s < latest_db.sql" % (LOCAL_DB_USERNAME,
+                                                      LOCAL_DB_PASSWORD,
+                                                      LOCAL_DB_NAME))

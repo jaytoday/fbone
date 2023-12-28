@@ -1,50 +1,101 @@
 # INTRODUCTION
 
-Fbone (Flask bone) is a [Flask](http://flask.pocoo.org) (Python microframework) template/bootstrap/boilerplate application.
+Fbone (Flask bone) is a [Flask](http://flask.pocoo.org) (Python microframework) template/bootstrap/boilerplate application, with best practices (I hope).
 
-![Flask bone homepage screenshot](http://github.com/imwilsonxu/fbone/raw/master/screenshots/flask-bone-homepage-screenshot.png)
+You can use it for
 
-## FEATURES
+- learning Flask.
+- kicking off your new project.
 
-- A well designed structure for big project.
-- Use [jQuery](http://jquery.com/), [bootstrap](https://github.com/twitter/bootstrap) and [HTML5 Boilerplate](https://github.com/h5bp/html5-boilerplate).
-- Implement tricky "Remember me" with [Flask-Login](https://github.com/maxcountryman/flask-login).
-- Handle forms with [WTForms](http://wtforms.simplecodes.com/).
-- Handle database with [SQLAlchemy](http://www.sqlalchemy.org).
-- Use [Flask-Admin](https://flask-admin.readthedocs.org/en/latest/quickstart/) to build to admin interface.
-- Deploy on Apache + mod\_wsgi with [fabric](http://flask.pocoo.org/docs/deploying/mod_wsgi/).
-- i18n support with [Flask-Babel](http://packages.python.org/Flask-Babel/).
-- Unit testing with [Flask-Testing](http://packages.python.org/Flask-Testing/).
+## COMPONENTS
+
+### Frontend
+
+- [HTML5 Boilerplate](https://github.com/h5bp/html5-boilerplate)
+- [jQuery](http://jquery.com/)
+- [Twitter Bootstrap](https://github.com/twitter/bootstrap)
+- [Jinja2](http://jinja.pocoo.org/docs/dev/)
+
+### Flask Extensions
+
+- [SQLAlchemy](http://www.sqlalchemy.org) and [Flask-SQLAlchemy](http://flask-sqlalchemy.pocoo.org)
+- [WTForms](http://wtforms.readthedocs.io) and [Flask-WTF](https://flask-wtf.readthedocs.io).
+- [Flask-Login](https://flask-login.readthedocs.io)
+- [Flask-Testing](https://pythonhosted.org/Flask-Testing/)
+- [Flask-RESTful](http://flask-restful-cn.readthedocs.io/)
+
+### Others
+
+- Modular Applications with Blueprints.
+- Use [Sentry](https://getsentry.com) for real-time crash reporting.
+- Automated managament via [fabric](http://flask.pocoo.org/docs/patterns/fabric/)
 
 ## USAGE
 
-Assume you are in Ubuntu and the project name is "myapp".
+Pre-required Setup:
 
-    sudo git clone https://github.com/imwilsonxu/fbone.git /srv/www/myapp
-    sudo chmod -R o+w /srv/www/myapp
-    cd /srv/www/myapp
-    fab init:myapp
+- MacOS/Ubuntu (should be fine in other linux distro)
+- git
+- Python / pip / Fabric
+- sqlite / MySQL
+- Apache + mod\_wsgi
 
-Open `http://127.0.0.1`, done!
+    git clone https://github.com/imwilsonxu/fbone.git fbone
 
-Init/reset database (with sqlite, check out `fbone/config.py`).
-
-    python manage.py initdb
-    sudo chmod o+w /tmp/<project>.sqlite
-
-Debug with local server.
-    
-    fab run
-
-Compile babel.
-
-    fab babel
+    fab setup_python_macos
+    fab bootstrap
+    fab test
+    fab debug
 
 ## STRUCTURE
 
-    sudo apt-get install -y tree
-    cd fbone
-    tree
+    ├── CHANGES                     Change logs
+    ├── README.markdown
+    ├── fabfile.py                  Fabric file to automated managament project
+    ├── fbone.conf                  Apache config
+    ├── requirements.txt            3rd libraries
+    ├── tests.py                    Unittests
+    ├── wsgi.py                     Wsgi app
+    ├── fbone
+       ├── __init__.py
+       ├── app.py                   Main App
+       ├── config.py                Develop / Testing configs
+       ├── constants.py             Constants
+       ├── decorators.py            Customized decorators
+       ├── extensions.py            Flask extensions
+       ├── filters.py               Flask filters
+       ├── utils.py                 Python utils
+       ├── frontend                 Frontend blueprint
+       │   ├── __init__.py
+       │   ├── forms.py             Forms used in frontend modular
+       │   ├── views.py             Views used in frontend modular
+       ├── user
+       ├── api
+       ├── static                   Static files
+       │   ├── css
+       │   ├── favicon.png
+       │   ├── humans.txt
+       │   ├── img
+       │   ├── js
+       │   └── robots.txt
+       └── templates                Jinja2 templates
+           ├── errors
+           ├── frontend
+           ├── index.html
+           ├── layouts              Jinja2 layouts
+           │   ├── base.html
+           │   └── user.html
+           ├── macros               Jinja2 macros
+           ├── mails                Mail templates
+           └── user
+
+## TODO
+
+- Upgrade to [Python3k](https://www.python.org/download/releases/3.0/).
+- User [Celery](http://celeryprojet.org), distributed task queue.
+- User [Elastic Search](https://github.com/elastic/elasticsearch), Open Source, Distributed, RESTful Search Engine.
+- Use [PostgreSQL](https://www.postgresql.org).
+- Use [GeeTest](http://www.geetest.com), a popular CAPTCHA service in China.
 
 ## LICENSE
 
@@ -52,4 +103,7 @@ Compile babel.
 
 ## ACKNOWLEDGEMENTS
 
-Thanks to Flask, its [extensions](http://flask.pocoo.org/extensions/), and other goodies.
+Many thanks to Python, Flask and other good stacks.
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/imwilsonxu/fbone/trend.png)](https://bitdeli.com/free "Bitdeli Badge")

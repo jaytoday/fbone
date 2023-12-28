@@ -1,56 +1,62 @@
 # -*- coding: utf-8 -*-
 
-PROJECT = "fbone"
+import os
+
+from utils import make_dir, INSTANCE_FOLDER_PATH
+
 
 class BaseConfig(object):
+
+    PROJECT = "fbone"
+
+    # Get app root path, also can use flask.root_path.
+    # ../../config.py
+    PROJECT_ROOT = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 
     DEBUG = False
     TESTING = False
 
-    # os.urandom(24)
+    ADMINS = ['youremail@yourdomain.com']
+
+    # http://flask.pocoo.org/docs/quickstart/#sessions
     SECRET_KEY = 'secret key'
+
+    LOG_FOLDER = os.path.join(INSTANCE_FOLDER_PATH, 'logs')
+
+    # Fild upload, should override in production.
+    # Limited the maximum allowed payload to 16 megabytes.
+    # http://flask.pocoo.org/docs/patterns/fileuploads/#improving-uploads
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024
+    UPLOAD_FOLDER = os.path.join(INSTANCE_FOLDER_PATH, 'uploads')
 
 
 class DefaultConfig(BaseConfig):
 
     DEBUG = True
 
-    SQLALCHEMY_ECHO = True
-    # Sqlite
-    # Use a tmp database, change to anywhere to suit yourself.
-    SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/%s.sqlite' % PROJECT
-    # Mysql:
-    #SQLALCHEMY_DATABASE_URI = 'mysql://dbusername:dbpassword@dbhost/dbname'
+    SENTRY_DSN = ""
 
-    # To create log folder.
-    # $ sudo mkdir -p /var/log/<PROJECT>
-    # $ sudo chown $USER /var/log/<PROJECT>
-    DEBUG_LOG = '/var/log/%s/debug.log' % PROJECT
+    MAIL_HOST = ""
+    FROM_ADDR = ""
+    TO_ADDRS = [""]
+    MAIL_USERNAME = ""
+    MAIL_PASSWORD = ""
 
-    ACCEPT_LANGUAGES = ['zh']
-    BABEL_DEFAULT_LOCALE = 'en'
-
-    CACHE_TYPE = 'simple'
-    CACHE_DEFAULT_TIMEOUT = 60
-
-    # Should be imported from env var.
-    # https://bitbucket.org/danjac/flask-mail/issue/3/problem-with-gmails-smtp-server
-    MAIL_DEBUG = DEBUG
-    MAIL_SERVER = 'smtp.gmail.com'
-    MAIL_USE_TLS = True
-    MAIL_USE_SSL = False
-    MAIL_USERNAME = 'gmail_username'
-    MAIL_PASSWORD = 'gmail_password'
-    DEFAULT_MAIL_SENDER = '%s@gmail.com' % MAIL_USERNAME
-
-    # Should be imported from env var.
-    # export FBONE_APP_CONFIG=/home/wilson/.fbone.cfg
-    USER_IMG_UPLOAD_PATH = "/path/to/fbone/static/img/users"
+    # Flask-Sqlalchemy: http://packages.python.org/Flask-SQLAlchemy/config.html
+    SQLALCHEMY_ECHO = False
+    # QLALCHEMY_TRACK_MODIFICATIONS adds significant overhead and will be
+    # disabled by default in the future.
+    SQLALCHEMY_TRACK_MODIFICATIONS = True
+    # SQLITE for prototyping.
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///' + INSTANCE_FOLDER_PATH + '/db.sqlite'
+    # MYSQL for production.
+    #SQLALCHEMY_DATABASE_URI = 'mysql://username:password@server/db?charset=utf8'
 
 
 class TestConfig(BaseConfig):
     TESTING = True
     CSRF_ENABLED = False
+    WTF_CSRF_ENABLED = False
 
     SQLALCHEMY_ECHO = False
     SQLALCHEMY_DATABASE_URI = 'sqlite://'
